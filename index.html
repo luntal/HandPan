@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hand Tracking with MediaPipe</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        .input_video {
+            display: none;
+        }
+        .output_canvas {
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <video class="input_video"></video>
+        <canvas class="output_canvas" width="1280px" height="720px"></canvas>
+    </div>
+    <script type="module">
+    const videoElement = document.getElementsByClassName('input_video')[0];
+    const canvasElement = document.getElementsByClassName('output_canvas')[0];
+    const canvasCtx = canvasElement.getContext('2d');
+
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffers = [];
+
+    // Audio setup
+    // const audioSamples = [];
+    // for (let i = 1; i <= 10; i++) {
+    //     const audio = new Audio(`samples/sample-${i.toString().padStart(2, '0')}.wav`);
+    //     audioSamples.push(audio);
+    // }
+
+    async function loadAudio(url, index) {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    audioBuffers[index] = await audioContext.decodeAudioData(arrayBuffer);
+    }
+
+    async function playSound(buffer) {
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.start(0);
+    }
+
+    // Preload audio files
+    async function preloadAudioFiles() {
+        for (let i = 0; i < 10; i++) {
+            await loadAudio(`samples/sample-${(i+1).toString().padStart(2, '0')}.wav`, i);
+        }
+    }
+
+    // Call this during initialization
+    preloadAudioFiles();
+
+
+
+    let lastTriggeredArea = -1;
+    let previousLeft = 0;
+    let previousRight = 0;
+
+    function drawGrid(ctx, width, height) {
+        const gridHeight = height / 3;
+        const startY = height - gridHeight;
+        const cellWidth = width / 10;
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 4;
+
+        // Draw vertical lines
+        for (let i = 0; i <= 10; i++) {
+            const x = i * cellWidth;
+            ctx.beginPath();
+            ctx.moveTo(x, startY);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+        }
+
+        // Draw horizontal lines (top and bottom of grid)
+        ctx.beginPath();
+        ctx.moveTo(0, startY);
+        ctx.lineTo(width, startY);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, height);
+        ctx.lineTo(width, height);
+        ctx.stroke();
+    }
+
+    async function checkAndTriggerAudio(x, y, width, height) {
+    const gridHeight = height / 3;
+    const startY = height - gridHeight;
+    const cellWidth = width / 10;
+
+    if (y >= startY) {
+        const areaIndex = Math.floor(x / cellWidth);
+
+        // Trigger the audio sample every time the grid part is entered
+        try {
+            await audioSamples[areaIndex].play();
+        } catch (error) {
+            console.error(`Failed to play audio sample: ${error}`);
+        }
+
+        // Update lastTriggeredArea
+        lastTriggeredArea = areaIndex;
+    } else {
+        // Reset lastTriggeredArea when the finger leaves the grid
+        lastTriggeredArea = -1;
+    }
+    }
+
+    async function trigger(areaIndex){
+      // await audioSamples[areaIndex].play();
+      playSound(audioBuffers[areaIndex]);
+      
+    }
+
+    function onResults(results) {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      // Flip the canvas horizontally to create a selfie view
+      canvasCtx.scale(-1, 1);
+      canvasCtx.translate(-canvasElement.width, 0);
+
+      // Draw the flipped image
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      // Reset transformations so the grid and text are not flipped
+      canvasCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+      // Draw the grid
+      drawGrid(canvasCtx, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+          const landmarks = results.multiHandLandmarks[i];
+          let handedness = results.multiHandedness[i].label;
+          handedness = (handedness === 'Left') ? 'Right' : (handedness === 'Right') ? 'Left': 'Right';
+          const handIndex = (handedness === 'Left') ? 0 : (handedness === 'Right') ? 1 : -1;
+          
+          // Flip landmarks for drawing since the canvas was flipped
+          const flippedLandmarks = landmarks.map(landmark => {
+            return {
+              x: 1 - landmark.x,
+              y: landmark.y,
+              z: landmark.z
+            };
+          });
+
+          drawConnectors(canvasCtx, flippedLandmarks, HAND_CONNECTIONS,
+                         {color: '#90EE90', lineWidth: 3});
+          drawLandmarks(canvasCtx, flippedLandmarks, {color: '#006400', lineWidth: 1, radius: 2});
+          
+
+          // Draw a red point at the index tip position
+          const indexTipX = flippedLandmarks[8].x * canvasElement.width;
+          const indexTipY = flippedLandmarks[8].y * canvasElement.height; 
+          canvasCtx.beginPath();
+          canvasCtx.arc(indexTipX, indexTipY, 10, 0, 2 * Math.PI); // 5 is the radius of the point
+          canvasCtx.fillStyle = 'red'; // Set the color to red
+          canvasCtx.fill();
+
+          // Display hand type (Left/Right)
+          // canvasCtx.fillStyle = "white";
+          // canvasCtx.strokeStyle = "black";
+          // canvasCtx.lineWidth = 4;
+          // canvasCtx.font = "30px Arial";
+          // canvasCtx.strokeText(handedness, flippedLandmarks[0].x * canvasElement.width, 
+          //                      flippedLandmarks[0].y * canvasElement.height - 20);
+          // canvasCtx.fillText(handedness, flippedLandmarks[0].x * canvasElement.width, 
+          //                    flippedLandmarks[0].y * canvasElement.height - 20);
+
+          // Display normalized index finger tip coordinates and check for audio trigger
+          const indexTip = flippedLandmarks[8];
+          const normalizedX = indexTip.x.toFixed(3);
+          const normalizedY = indexTip.y.toFixed(3);
+          const displayX = indexTip.x * canvasElement.width;
+          const displayY = indexTip.y * canvasElement.height;
+          
+          // checkAndTriggerAudio(displayX, displayY, canvasElement.width, canvasElement.height);
+          const cellWidth = canvasElement.width / 10;
+          const areaIndex = Math.floor(displayX / cellWidth);
+          const gridHeight = canvasElement.height / 3;
+          const startY = canvasElement.height - gridHeight;
+          
+
+          // canvasCtx.font = "24px Arial";
+          // canvasCtx.fillStyle = "yellow";
+          // canvasCtx.strokeStyle = "black";
+          // canvasCtx.lineWidth = 3;
+          // canvasCtx.strokeText(`(${normalizedX}, ${normalizedY})`, displayX, displayY - 10);
+          // canvasCtx.fillText(`(${normalizedX}, ${normalizedY})`, displayX, displayY - 10);
+
+          // Display areaIndex at the top left corner
+          // canvasCtx.font = "24px Arial";
+          // canvasCtx.fillStyle = "yellow";
+          // canvasCtx.strokeStyle = "black";
+          // canvasCtx.lineWidth = 3;
+          // canvasCtx.strokeText(`Area Index: ${areaIndex}`, 10, 30);
+          // canvasCtx.fillText(`Area Index: ${areaIndex}`, 10, 30);
+          // check threshold
+          const isInGrid = (displayY >= startY) ? 1: 0;
+          // canvasCtx.strokeText(`Is in Grid: ${isInGrid}`, 10, 60);
+          // canvasCtx.fillText(`Is in Grid: ${isInGrid}`, 10,60);
+
+          // register transition:
+          if (handIndex == 0){
+            const transition = ((isInGrid - previousLeft) == 1) ? 1: 0;
+            previousLeft = isInGrid;
+            if (transition == 1){
+              // console.log('Left Hand transition detected!');
+              trigger(areaIndex);
+            }
+          } else {
+            const transition = ((isInGrid - previousRight) == 1) ? 1: 0;
+            previousRight = isInGrid;
+            if (transition == 1){
+              // console.log('Right Hand transition detected!');
+              trigger(areaIndex);
+            }
+          }
+          
+          
+          
+        }
+      }
+      canvasCtx.restore();
+    }
+
+    const hands = new Hands({locateFile: (file) => {
+      return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+    }});
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    hands.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({image: videoElement});
+      },
+      width: 1280,
+      height: 720
+    });
+    camera.start();
+    </script>
+</body>
+</html>
