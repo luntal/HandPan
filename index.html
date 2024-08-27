@@ -13,23 +13,53 @@
         .output_canvas {
             display: block;
             margin: 0 auto;
+            width: 100%;
+            height: auto;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <video class="input_video"></video>
-        <canvas class="output_canvas" width="1280px" height="720px"></canvas>
+        <canvas class="output_canvas"></canvas>
     </div>
     <script type="module">
     const videoElement = document.getElementsByClassName('input_video')[0];
     const canvasElement = document.getElementsByClassName('output_canvas')[0];
     const canvasCtx = canvasElement.getContext('2d');
+    
+    // Canva Setup --------------------------------------
+    function resizeCanvas() {
+      const videoAspectRatio = 1280 / 720; // Adjust based on the input video aspect ratio (Width / Height)
+
+      let canvasWidth = window.innerWidth;
+      let canvasHeight = canvasWidth / videoAspectRatio;
+    
+      if (canvasHeight > window.innerHeight) {
+        canvasHeight = window.innerHeight;
+        canvasWidth = canvasHeight * videoAspectRatio;
+
+      canvasElement.width = canvasWidth;
+      canvasElement.height = canvasHeight;
+
+      videoElement.width = canvasWidth;
+      videoElement.height = canvasHeight;
+    }}
+
+    // Call resizeCanvas initially to set up the canvas size
+    resizeCanvas();
+
+    // Adjust the canvas size when the window is resized
+    window.onresize = resizeCanvas;
+
+
+
+    // Audio setup --------------------------------------
 
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const audioBuffers = [];
 
-    // Audio setup
+    
     // const audioSamples = [];
     // for (let i = 1; i <= 10; i++) {
     //     const audio = new Audio(`samples/sample-${i.toString().padStart(2, '0')}.wav`);
