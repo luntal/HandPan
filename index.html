@@ -16,42 +16,111 @@
             width: 100%;
             height: auto;
         }
+        #startStopButton {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            /* padding: 10px 20px;
+            z-index: 2;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            cursor: pointer; */
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <video class="input_video"></video>
         <canvas class="output_canvas"></canvas>
+        <button id="startStopButton">Start</button>
+
     </div>
     <script type="module">
     const videoElement = document.getElementsByClassName('input_video')[0];
     const canvasElement = document.getElementsByClassName('output_canvas')[0];
     const canvasCtx = canvasElement.getContext('2d');
+    const startStopButton = document.getElementById('startStopButton');
+
+
+    let cameraStarted = false;
+    const numAreas = 11;
     
     // Canva Setup --------------------------------------
     function resizeCanvas() {
-      const videoAspectRatio = 1280 / 720; // Adjust based on the input video aspect ratio (Width / Height)
+    const videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight || 1280 / 720; // Use video aspect ratio, or default to 16:9 if not available
 
-      let canvasWidth = window.innerWidth;
-      let canvasHeight = canvasWidth / videoAspectRatio;
-    
-      if (canvasHeight > window.innerHeight) {
+    let canvasWidth = window.innerWidth;
+    let canvasHeight = canvasWidth / videoAspectRatio;
+
+    if (canvasHeight > window.innerHeight) {
         canvasHeight = window.innerHeight;
         canvasWidth = canvasHeight * videoAspectRatio;
+    }
 
-      canvasElement.width = canvasWidth;
-      canvasElement.height = canvasHeight;
+    canvasElement.width = canvasWidth;
+    canvasElement.height = canvasHeight;
 
-      videoElement.width = canvasWidth;
-      videoElement.height = canvasHeight;
-    }}
+    // Ensure the video element is also sized correctly
+    videoElement.width = canvasWidth;
+    videoElement.height = canvasHeight;
+
+    // Set the style to match the internal canvas size
+    canvasElement.style.width = `${canvasWidth}px`;
+    canvasElement.style.height = `${canvasHeight}px`;
+}
 
     // Call resizeCanvas initially to set up the canvas size
     resizeCanvas();
 
+    // Force an initial resize to set up the canvas and video size correctly
+    // window.addEventListener('load', resizeCanvas);
     // Adjust the canvas size when the window is resized
     window.onresize = resizeCanvas;
 
+    function drawRectangleAndFadeOut(areaIndex) {
+      const distance = canvasElement.width / numAreas;
+      const rectX = areaIndex * distance;
+      const rectY = canvasElement.height - canvasElement.height/ 3;
+      const rectWidth = canvasElement.width / numAreas;
+      const rectHeight = canvasElement.height/ 3;
+      const fadeDuration = 1000; // 1 second
+      const fadeSteps = 30; // Assuming 60 frames per second
+      const fadeInterval = fadeDuration / fadeSteps;
+      let alpha = 1.0; // Initial opacity
+      const alphaDecrement = 1 / fadeSteps;
+      let step = 0; // Start at step 0
+
+      // Function to compute logarithmic fade
+      function computeLogarithmicAlpha(step, totalSteps) {
+          const normalizedStep = step / totalSteps;
+          return 1 - Math.log(1 + 9 * normalizedStep) / Math.log(10);
+      }
+
+      // Draw the initial rectangle
+      function drawRectangle(alpha) {
+        // canvasCtx.clearRect(rectX, rectY, rectWidth, rectHeight); // Clear the previous rectangle
+        canvasCtx.globalAlpha = alpha; // Set the current opacity
+        canvasCtx.fillStyle = 'blue';
+        canvasCtx.fillRect(rectX, rectY, rectWidth, rectHeight);
+        canvasCtx.globalAlpha = 1.0; // Reset alpha for other drawings
+      }
+
+      // Function to gradually reduce the alpha
+      // Function to gradually reduce the alpha
+      function fadeOut() {
+                if (step <= fadeSteps) {
+                    const alpha = computeLogarithmicAlpha(step, fadeSteps);
+                    drawRectangle(alpha);
+                    step++;
+                    requestAnimationFrame(fadeOut);
+                }
+            }
+
+      // Draw the initial rectangle and start fading out
+      drawRectangle(alpha);
+      setTimeout(fadeOut, fadeInterval);
+    }
 
 
     // Audio setup --------------------------------------
@@ -81,7 +150,7 @@
 
     // Preload audio files
     async function preloadAudioFiles() {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < numAreas; i++) {
             await loadAudio(`samples/sample-${(i+1).toString().padStart(2, '0')}.wav`, i);
         }
     }
@@ -94,17 +163,20 @@
     let lastTriggeredArea = -1;
     let previousLeft = 0;
     let previousRight = 0;
+    let previousAreaLeft = -1;
+    let previousAreaRight = -1;
+    
 
     function drawGrid(ctx, width, height) {
         const gridHeight = height / 3;
         const startY = height - gridHeight;
-        const cellWidth = width / 10;
+        const cellWidth = width / numAreas;
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.lineWidth = 4;
 
         // Draw vertical lines
-        for (let i = 0; i <= 10; i++) {
+        for (let i = 0; i <= numAreas; i++) {
             const x = i * cellWidth;
             ctx.beginPath();
             ctx.moveTo(x, startY);
@@ -124,28 +196,7 @@
         ctx.stroke();
     }
 
-    async function checkAndTriggerAudio(x, y, width, height) {
-    const gridHeight = height / 3;
-    const startY = height - gridHeight;
-    const cellWidth = width / 10;
-
-    if (y >= startY) {
-        const areaIndex = Math.floor(x / cellWidth);
-
-        // Trigger the audio sample every time the grid part is entered
-        try {
-            await audioSamples[areaIndex].play();
-        } catch (error) {
-            console.error(`Failed to play audio sample: ${error}`);
-        }
-
-        // Update lastTriggeredArea
-        lastTriggeredArea = areaIndex;
-    } else {
-        // Reset lastTriggeredArea when the finger leaves the grid
-        lastTriggeredArea = -1;
-    }
-    }
+    
 
     async function trigger(areaIndex){
       // await audioSamples[areaIndex].play();
@@ -217,7 +268,7 @@
           const displayY = indexTip.y * canvasElement.height;
           
           // checkAndTriggerAudio(displayX, displayY, canvasElement.width, canvasElement.height);
-          const cellWidth = canvasElement.width / 10;
+          const cellWidth = canvasElement.width / numAreas;
           const areaIndex = Math.floor(displayX / cellWidth);
           const gridHeight = canvasElement.height / 3;
           const startY = canvasElement.height - gridHeight;
@@ -246,17 +297,38 @@
           if (handIndex == 0){
             const transition = ((isInGrid - previousLeft) == 1) ? 1: 0;
             previousLeft = isInGrid;
+            
             if (transition == 1){
               // console.log('Left Hand transition detected!');
               trigger(areaIndex);
+              // Draw and fade out the rectangle
+              drawRectangleAndFadeOut(areaIndex);
             }
+            
+            // Slide for left hand
+            if (transition == 0 && isInGrid && areaIndex != previousAreaLeft){
+              trigger(areaIndex);
+              drawRectangleAndFadeOut(areaIndex);
+            }
+            previousAreaLeft = areaIndex;
+
+
           } else {
             const transition = ((isInGrid - previousRight) == 1) ? 1: 0;
             previousRight = isInGrid;
             if (transition == 1){
               // console.log('Right Hand transition detected!');
               trigger(areaIndex);
+              drawRectangleAndFadeOut(areaIndex);
+
             }
+
+            // Slide for right hand
+            if (transition == 0 && isInGrid && areaIndex != previousAreaRight){
+              trigger(areaIndex);
+              drawRectangleAndFadeOut(areaIndex);
+            }
+            previousAreaRight = areaIndex;
           }
           
           
@@ -277,14 +349,32 @@
     });
     hands.onResults(onResults);
 
-    const camera = new Camera(videoElement, {
+
+    let camera;
+    camera = new Camera(videoElement, {
       onFrame: async () => {
         await hands.send({image: videoElement});
       },
       width: 1280,
       height: 720
     });
-    camera.start();
+
+    startStopButton.addEventListener('click', () => {
+        if (cameraStarted) {
+            camera.stop();
+            startStopButton.textContent = 'Webcam Start';
+            console.log('camera stop: ', cameraStarted);
+        } else {
+            camera.start();
+            startStopButton.textContent = 'Webcam Stop';
+            console.log('camera start ', cameraStarted);
+
+        }
+        cameraStarted = !cameraStarted;
+    });
+
+
+    // camera.start();
     </script>
 </body>
 </html>
