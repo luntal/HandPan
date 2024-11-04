@@ -296,21 +296,35 @@
         ctx.stroke();
     }
     
-    let cooldownActive = false;
+    let cooldownActiveLeft = false;
+    let cooldownActiveRight = false;
     const cooldownTimeMs = 40;
 
-    async function trigger(areaIndex){
-      if (!cooldownActive) {
-    cooldownActive = true;
-    const adjustedIndex = (areaIndex + soundOffset); 
-    playSound(audioBuffers[adjustedIndex]); 
+    async function trigger(areaIndex, handIndex) {
+  // Determine which hand triggered the sound
+  let cooldownActive = (handIndex === 0) ? cooldownActiveLeft : cooldownActiveRight;
+
+  if (!cooldownActive) {
+    // Set the cooldown for the corresponding hand
+    if (handIndex === 0) {
+      cooldownActiveLeft = true;
+    } else {
+      cooldownActiveRight = true;
+    }
+
+    const adjustedIndex = (areaIndex + soundOffset);
+    playSound(audioBuffers[adjustedIndex]);
 
     setTimeout(() => {
-      cooldownActive = false;
+      // Reset the cooldown for the corresponding hand
+      if (handIndex === 0) {
+        cooldownActiveLeft = false;
+      } else {
+        cooldownActiveRight = false;
+      }
     }, cooldownTimeMs);
   }
-      
-    }
+}
 
     // Hand Tracking --------------------------------------
     function onResults(results) {
@@ -413,14 +427,14 @@
               
               if (transition == 1){
                 // console.log('Left Hand transition detected!');
-                trigger(areaIndex);
+                trigger(areaIndex, handIndex);
                 // Draw and fade out the rectangle
                 drawRectangleAndFadeOut(areaIndex);
               }
               
               // Slide for left hand
               if (transition == 0 && isInGrid && areaIndex != previousAreaLeft){
-                trigger(areaIndex);
+                trigger(areaIndex, handIndex);
                 drawRectangleAndFadeOut(areaIndex);
               }
               previousAreaLeft = areaIndex;
@@ -431,14 +445,14 @@
               previousRight = isInGrid;
               if (transition == 1){
                 // console.log('Right Hand transition detected!');
-                trigger(areaIndex);
+                trigger(areaIndex, handIndex);
                 drawRectangleAndFadeOut(areaIndex);
 
               }
 
               // Slide for right hand
               if (transition == 0 && isInGrid && areaIndex != previousAreaRight){
-                trigger(areaIndex);
+                trigger(areaIndex, handIndex);
                 drawRectangleAndFadeOut(areaIndex);
               }
               previousAreaRight = areaIndex;
