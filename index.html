@@ -182,7 +182,7 @@
             // Schedule the creation of the next rectangle based on the next time interval
             currentIntervalIndex = (currentIntervalIndex + 1) % timeIntervals.length;
             if (positionSequence.length > 0) {
-                rectangleCreationTimeout = setTimeout(createRectangle, timeIntervals[currentIntervalIndex]*1.6);
+                rectangleCreationTimeout = setTimeout(createRectangle, timeIntervals[currentIntervalIndex]*1.7);
             }
         }
     }
@@ -192,7 +192,7 @@
 
         for (let i = 0; i < rectangles.length; i++) {
             const rect = rectangles[i];
-            rect.y += rect.speed; // Move the rectangle down
+            rect.y += rect.speed * 0.7; // Move the rectangle down
             canvasCtx.fillStyle = rect.color;
             canvasCtx.fillRect(rect.x - rect.width / 2, rect.y, rect.width, rect.height);
 
@@ -297,7 +297,7 @@
     }
     
     let cooldownActive = false;
-    const cooldownTimeMs = 200;
+    const cooldownTimeMs = 40;
 
     async function trigger(areaIndex){
       if (!cooldownActive) {
