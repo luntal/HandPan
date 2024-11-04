@@ -233,7 +233,13 @@
     async function playSound(buffer) {
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
-        source.connect(audioContext.destination);
+        // Create a gain node
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 0.5; // Set initial volume to 50% (range: 0 to 1)
+
+        // Connect the source to the gain node, and then to the destination
+        source.connect(gainNode);
+        gainNode.connect(audioContext.destination);
         source.start(0);
     }
 
@@ -289,12 +295,20 @@
         ctx.lineTo(width, height);
         ctx.stroke();
     }
+    
+    let cooldownActive = false;
+    const cooldownTimeMs = 40;
 
     async function trigger(areaIndex){
-      // Apply the offset to the areaIndex
-      const adjustedIndex = (areaIndex + soundOffset)// % numAreas; // Ensure it stays within bounds
+      if (!cooldownActive) {
+    cooldownActive = true;
+    const adjustedIndex = (areaIndex + soundOffset); 
+    playSound(audioBuffers[adjustedIndex]); 
 
-      playSound(audioBuffers[adjustedIndex]); 
+    setTimeout(() => {
+      cooldownActive = false;
+    }, cooldownTimeMs);
+  }
       
     }
 
