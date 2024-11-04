@@ -34,7 +34,7 @@
     <div class="container">
         <video class="input_video"></video>
         <canvas class="output_canvas"></canvas>
-        <button id="startStopButton">Start</button>
+        <!-- <button id="startStopButton">Start</button> -->
 
     </div>
     <script type="module">
@@ -44,7 +44,7 @@
     const startStopButton = document.getElementById('startStopButton');
 
 
-    let cameraStarted = false;
+    let cameraStarted = true;
     const numAreas = 11;
     
     // Canva Setup --------------------------------------
@@ -373,7 +373,8 @@
         }
         cameraStarted = !cameraStarted;
     });
-
+    camera.start();
+    
 
     // camera.start();
     </script>
